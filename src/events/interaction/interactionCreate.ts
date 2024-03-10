@@ -1,5 +1,6 @@
-import { type CommandInteraction, Events } from "discord.js";
+import { type ButtonInteraction, type CommandInteraction, Events } from "discord.js";
 import type { Event } from "../../types/index.js";
+import { extractCreatorIdFromBookmark } from "../../util/index.js";
 
 /**
  * Handles the chat input command interaction.
@@ -37,6 +38,41 @@ async function handleCommandInteraction(interaction: CommandInteraction<"cached"
   }
 }
 
+/**
+ * Handles the delete bookmark button interaction.
+ *
+ * @param interaction - The interaction to handle.
+ * @returns A promise that resolves when the interaction has been handled.
+ */
+async function handleDeleteBookmark(interaction: ButtonInteraction<"cached">): Promise<void> {
+  if (interaction.customId !== "delete-bookmark") return;
+
+  if (interaction.user.id !== extractCreatorIdFromBookmark(interaction.message)) {
+    await interaction.reply({
+      content: "You can only delete bookmarks you created.",
+      ephemeral: true,
+    });
+
+    return;
+  }
+
+  try {
+    await interaction.message.delete();
+
+    await interaction.reply({
+      content: "Bookmark successfully deleted.",
+      ephemeral: true,
+    });
+  } catch (error) {
+    console.error(error);
+
+    await interaction.reply({
+      content: "⚠️ There was an error while deleting the bookmark.",
+      ephemeral: true,
+    });
+  }
+}
+
 export default {
   name: Events.InteractionCreate,
   async execute(interaction) {
@@ -49,6 +85,10 @@ export default {
       });
 
       return;
+    }
+
+    if (interaction.isButton()) {
+      await handleDeleteBookmark(interaction);
     }
 
     if (interaction.isCommand()) {
