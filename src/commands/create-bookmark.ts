@@ -1,13 +1,21 @@
-import { env } from "node:process";
 import {
-  type APIButtonComponentWithURL,
   ApplicationCommandType,
-  ButtonStyle,
+  ChannelType,
   ComponentType,
+  InteractionResponseType,
+  MessageFlags,
   TextInputStyle,
-} from "discord.js";
-import type { Command } from "../types/index.js";
-import { createBookmarkEmbed } from "../util/index.js";
+  type API,
+  type APIButtonComponentWithURL,
+  type APIMessageApplicationCommandGuildInteraction,
+} from "@discordjs/core/http-only";
+import { messageLink, respond, type Env } from "../util/index.js";
+
+export type CreateBookmarkCommandOptions = {
+  api: API;
+  env: Env;
+  interaction: APIMessageApplicationCommandGuildInteraction;
+};
 
 export default {
   data: {
@@ -15,133 +23,109 @@ export default {
     type: ApplicationCommandType.Message,
     dm_permission: false,
   },
-  async execute(interaction) {
-    if (!interaction.isMessageContextMenuCommand()) return;
-
-    const { client, targetMessage, user } = interaction;
-
-    const bookmarksChannel = client.channels.resolve(env.BOOKMARKS_CHANNEL_ID);
-
-    if (!bookmarksChannel?.isTextBased()) {
-      await interaction.reply({
-        content: "The bookmarks channel not found or isn't a text channel.",
-        ephemeral: true,
-      });
-
-      return;
-    }
-
-    const bookmarks = await bookmarksChannel.messages.fetch({ limit: 100 });
-
-    for (const bookmark of bookmarks.values()) {
-      const linkButton = bookmark.components[0]?.components[0] as APIButtonComponentWithURL;
-
-      if (linkButton.url === targetMessage.url) {
-        await interaction.reply({
-          content: "A bookmark for that message already exists.",
-          ephemeral: true,
-        });
-
-        return;
-      }
-    }
-
-    await interaction.showModal({
-      customId: "create-bookmark",
-      title: "Create Bookmark",
-      components: [
-        {
-          components: [
-            {
-              customId: "name",
-              style: TextInputStyle.Short,
-              type: ComponentType.TextInput,
-              label: "Name",
-              minLength: 1,
-              maxLength: 256,
-              placeholder: "The name for the bookmark",
-              required: false,
-            },
-          ],
-          type: ComponentType.ActionRow,
-        },
-        {
-          components: [
-            {
-              customId: "description",
-              style: TextInputStyle.Paragraph,
-              type: ComponentType.TextInput,
-              minLength: 1,
-              maxLength: 1_024,
-              label: "Description",
-              placeholder: "The description for the bookmark",
-              required: false,
-            },
-          ],
-          type: ComponentType.ActionRow,
-        },
-        {
-          components: [
-            {
-              customId: "links",
-              label: "Links",
-              minLength: 1,
-              maxLength: 1_024,
-              placeholder: "The links for the bookmark separated by a space",
-              style: TextInputStyle.Short,
-              type: ComponentType.TextInput,
-              required: false,
-            },
-          ],
-          type: ComponentType.ActionRow,
-        },
-      ],
-    });
-
-    const modalInteraction = await interaction.awaitModalSubmit({
-      filter: interaction => interaction.customId === "create-bookmark",
-      time: 60_000,
-    });
-
-    const description = modalInteraction.fields.getTextInputValue("description");
-    const links = modalInteraction.fields.getTextInputValue("links");
-    const name = modalInteraction.fields.getTextInputValue("name");
-
+  async execute({ api, env, interaction }: CreateBookmarkCommandOptions): Promise<Response> {
     try {
-      await bookmarksChannel.send({
-        embeds: [createBookmarkEmbed({ creator: user, description, links, message: targetMessage, name })],
-        components: [
-          {
-            components: [
-              {
-                label: "Original Message",
-                style: ButtonStyle.Link,
-                type: ComponentType.Button,
-                url: targetMessage.url,
-              },
-              {
-                custom_id: "delete-bookmark",
-                label: "Delete Bookmark",
-                style: ButtonStyle.Danger,
-                type: ComponentType.Button,
-              },
-            ],
-            type: ComponentType.ActionRow,
-          },
-        ],
-      });
+      const bookmarksChannel = await api.channels.get(env.BOOKMARKS_CHANNEL_ID);
 
-      await modalInteraction.reply({
-        content: "Bookmark successfully created.",
-        ephemeral: true,
+      if (bookmarksChannel.type !== ChannelType.GuildText) {
+        return respond({
+          data: { content: "The bookmarks channel is not a text channel.", flags: MessageFlags.Ephemeral },
+          type: InteractionResponseType.ChannelMessageWithSource,
+        });
+      }
+
+      const bookmarks = await api.channels.getMessages(bookmarksChannel.id, { limit: 100 });
+
+      const message = interaction.data.resolved.messages[interaction.data.target_id];
+
+      for (const bookmark of bookmarks) {
+        const linkButton = bookmark.components?.[0]?.components[0] as APIButtonComponentWithURL;
+
+        if (linkButton.url === messageLink(message.channel_id, message.id, interaction.guild_id)) {
+          return respond({
+            data: { content: "A bookmark for that message already exists.", flags: MessageFlags.Ephemeral },
+            type: InteractionResponseType.ChannelMessageWithSource,
+          });
+        }
+      }
+
+      return respond({
+        type: InteractionResponseType.Modal,
+        data: {
+          custom_id: "create-bookmark",
+          title: "Create Bookmark",
+          components: [
+            {
+              type: ComponentType.ActionRow,
+              components: [
+                {
+                  custom_id: "name",
+                  label: "Name",
+                  max_length: 256,
+                  min_length: 1,
+                  placeholder: "The name for the bookmark",
+                  required: false,
+                  style: TextInputStyle.Short,
+                  type: ComponentType.TextInput,
+                },
+              ],
+            },
+            {
+              type: ComponentType.ActionRow,
+              components: [
+                {
+                  custom_id: "description",
+                  label: "Description",
+                  max_length: 1_024,
+                  min_length: 1,
+                  placeholder: "The description for the bookmark",
+                  required: false,
+                  style: TextInputStyle.Paragraph,
+                  type: ComponentType.TextInput,
+                },
+              ],
+            },
+            {
+              type: ComponentType.ActionRow,
+              components: [
+                {
+                  custom_id: "links",
+                  label: "Links",
+                  max_length: 1_024,
+                  min_length: 1,
+                  placeholder: "The links for the bookmark separated by a space",
+                  required: false,
+                  style: TextInputStyle.Short,
+                  type: ComponentType.TextInput,
+                },
+              ],
+            },
+            {
+              type: ComponentType.ActionRow,
+              components: [
+                {
+                  custom_id: "target-message",
+                  label: "Target Message",
+                  min_length: 16,
+                  max_length: 20,
+                  placeholder: "The id of the target message",
+                  required: true,
+                  style: TextInputStyle.Short,
+                  type: ComponentType.TextInput,
+                  value: message.id,
+                },
+              ],
+            },
+          ],
+        },
       });
     } catch (error) {
-      console.error(error);
+      const message = ["An error occurred while creating the bookmark modal:", `\`\`\`${error}\`\`\``].join("\n");
 
-      await modalInteraction.reply({
-        content: "⚠️ There was an error while creating the bookmark.",
-        ephemeral: true,
+      return respond({
+        data: { content: message, flags: MessageFlags.Ephemeral },
+        type: InteractionResponseType.ChannelMessageWithSource,
       });
     }
   },
-} satisfies Command;
+} as const;
