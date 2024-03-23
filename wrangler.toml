@@ -1,0 +1,11 @@
+name = "pocket"
+main = "src/index.ts"
+compatibility_date = "2024-03-21"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+# BOOKMARKS_CHANNEL_ID=
+# DISCORD_APPLICATION_ID=
+# DISCORD_PUBLIC_KEY=
+# DISCORD_TOKEN=

@@ -1,24 +1,15 @@
-import { URL } from "node:url";
-import { Client, Collection, GatewayIntentBits, RESTEvents } from "discord.js";
-import { loadCommands, loadEvents } from "./util/index.js";
+import type { Request, ExecutionContext } from "@cloudflare/workers-types/experimental";
+import { API } from "@discordjs/core/http-only";
+import { REST } from "@discordjs/rest";
+import { handleRequest } from "./handlers/index.js";
+import type { Env } from "./util/index.js";
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
-});
+export default {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
+    const rest = new REST().setToken(env.DISCORD_TOKEN);
 
-client.commands = new Collection();
+    const api = new API(rest);
 
-const commands = await loadCommands(new URL("commands", import.meta.url));
-const events = await loadEvents(new URL("events", import.meta.url));
-
-for (const command of commands) {
-  client.commands.set(command.data.name, command);
-}
-
-for (const event of events) {
-  client[event.once ? "once" : "on"](event.name, async (...args) => event.execute(...args));
-}
-
-await client.login();
-
-client.rest.on(RESTEvents.RateLimited, console.error);
+    return handleRequest({ api, env, request });
+  },
+};
