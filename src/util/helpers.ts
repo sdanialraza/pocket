@@ -57,7 +57,7 @@ export function extractCreatorIdFromBookmark(message: APIMessage): Snowflake | n
 
   const match = /\(.+\)/.exec(fieldValue);
 
-  return match ? match[0].slice(1, -1) : null;
+  return match?.[0].slice(1, -1) ?? null;
 }
 
 export function messageLink(channelId: Snowflake, messageId: Snowflake, guildId?: Snowflake): string {

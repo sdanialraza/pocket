@@ -17,9 +17,9 @@ export type CreateBookmarkModalOptions = {
 export default {
   customId: "create-bookmark",
   async execute({ api, env, interaction }: CreateBookmarkModalOptions) {
+    const name = interaction.data.components[0].components[0].value;
     const description = interaction.data.components[1].components[0].value;
     const links = interaction.data.components[2].components[0].value;
-    const name = interaction.data.components[0].components[0].value;
     const messageId = interaction.data.components[3].components[0].value;
 
     const creator = interaction.member.user;
