@@ -6,7 +6,7 @@ import {
 } from "@discordjs/core/http-only";
 import { extractCreatorIdFromBookmark, respond, type Env } from "../util/index.js";
 
-type DeleteBookmarkButtonOptions = {
+export type DeleteBookmarkButtonOptions = {
   api: API;
   env: Env;
   interaction: APIMessageComponentButtonInteraction;
@@ -16,6 +16,13 @@ export default {
   customId: "delete-bookmark",
   async execute({ api, env, interaction }: DeleteBookmarkButtonOptions) {
     const userId = interaction.user?.id ?? interaction.member!.user.id;
+
+    if (interaction.message.channel_id !== env.BOOKMARKS_CHANNEL_ID) {
+      return respond({
+        data: { content: "This message is not in the bookmarks channel.", flags: MessageFlags.Ephemeral },
+        type: InteractionResponseType.ChannelMessageWithSource,
+      });
+    }
 
     if (userId !== extractCreatorIdFromBookmark(interaction.message)) {
       return respond({
